@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Alon Bay Hotel</title>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;800&family=Instrument+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="hero">
+  <div class="wrap">
+    <div class="nav">
+      <a class="brand" href="#top">Alon Bay Hotel</a>
+      <nav><a href="#rooms">Rooms</a><a href="#offers">Offers</a><a href="#checkin">Check in</a></nav>
+    </div>
+    <h1 id="top">Wake up to the water.</h1>
+    <p>Thirty-two rooms on a quiet bay, a ten-minute walk from the pier. Book direct and save.</p>
+  </div>
+  <svg class="waves" viewBox="0 0 600 140" fill="none" stroke="#5cc2cf" stroke-width="2" aria-hidden="true"><path d="M0 40c50-30 100 30 150 0s100-30 150 0 100 30 150 0 100-30 150 0"/><path d="M0 70c50-30 100 30 150 0s100-30 150 0 100 30 150 0 100-30 150 0"/><path d="M0 100c50-30 100 30 150 0s100-30 150 0 100 30 150 0 100-30 150 0"/></svg>
+</header>
+
+<main class="wrap">
+  <form class="book" id="search" novalidate>
+    <label>Check-in<input type="date" id="in" required></label>
+    <label>Check-out<input type="date" id="out" required></label>
+    <label>Guests<select id="guests"></select></label>
+    <label>Promo code<input id="promo" placeholder="e.g. STAY3" autocomplete="off"></label>
+    <button class="btn sun" type="submit">See rooms and prices</button>
+  </form>
+  <p class="msg" id="searchMsg" role="status"></p>
+
+  <section id="rooms">
+    <h2>Rooms</h2>
+    <p class="sub">Prices are per night and include breakfast for two. Totals update with your dates and promo code.</p>
+    <div class="rooms" id="roomList"></div>
+  </section>
+
+  <section id="offers">
+    <h2>Current offers</h2>
+    <p class="sub">Choose an offer to add its code to your search. Only one code applies per booking.</p>
+    <div class="promos" id="promoList"></div>
+  </section>
+
+  <section id="checkin">
+    <h2>Online check-in</h2>
+    <p class="sub">Already booked? Enter your confirmation code and last name to skip the front-desk queue.</p>
+    <div class="panel">
+      <form id="findForm">
+        <div class="row">
+          <label>Confirmation code<input id="ciCode" placeholder="ALN-XXXXX" autocomplete="off" required></label>
+          <label>Last name<input id="ciName" autocomplete="family-name" required></label>
+        </div>
+        <button class="btn" type="submit">Find my booking</button>
+      </form>
+      <div id="ciResult"></div>
+    </div>
+  </section>
+</main>
+
+<footer><div class="wrap">Alon Bay Hotel is a demo site. Bookings are saved only in this browser. Front desk open 24 hours.</div></footer>
+
+<dialog id="dlg" aria-labelledby="dlgTitle"></dialog>
+
+<script src="script.js"></script>
+</body>
+</html>
