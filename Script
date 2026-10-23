@@ -1,0 +1,140 @@
+const $=s=>document.querySelector(s);
+const peso=n=>new Intl.NumberFormat('en-PH',{style:'currency',currency:'PHP',maximumFractionDigits:0}).format(n);
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+// ---------- Data ----------
+const ROOMS=[
+ {id:'garden',name:'Garden Room',cap:2,rate:3800,floor:1,tone:'#2f8f83',desc:'Ground floor, opens onto the palm courtyard. Queen bed.'},
+ {id:'sea',name:'Sea View Deluxe',cap:3,rate:5600,floor:2,tone:'#17707c',desc:'Corner balcony facing the bay. King bed and daybed.'},
+ {id:'family',name:'Family Suite',cap:5,rate:8200,floor:3,tone:'#1b4f72',desc:'Two bedrooms, a small kitchen, and room for five.'},
+ {id:'loft',name:'Penthouse Loft',cap:4,rate:12500,floor:5,tone:'#0b2a3c',desc:'Top floor, private terrace, and sunrise over the water.'}
+];
+const PROMOS={
+ STAY3:{title:'Stay 3, save 15%',text:'15% off the room rate when you stay three nights or more.',ok:s=>s.nights>=3,off:s=>s.sub*.15,err:'STAY3 needs a stay of 3 nights or more.'},
+ EARLY10:{title:'Early planner',text:'10% off when check-in is at least 30 days away.',ok:s=>s.lead>=30,off:s=>s.sub*.10,err:'EARLY10 needs check-in at least 30 days from today.'},
+ WELCOME:{title:'Welcome gift',text:'₱500 off your first stay, any room, any length.',ok:s=>true,off:s=>Math.min(500,s.sub),err:''}
+};
+
+// ---------- Storage (localStorage with in-memory fallback) ----------
+let mem=[];
+const load=()=>{try{return JSON.parse(localStorage.getItem('alon.bookings')||'[]')}catch(e){return mem}};
+const save=a=>{mem=a;try{localStorage.setItem('alon.bookings',JSON.stringify(a))}catch(e){}};
+
+// ---------- Date helpers ----------
+const iso=d=>new Date(d-new Date().getTimezoneOffset()*6e4).toISOString().slice(0,10);
+const addDays=(s,n)=>new Date(Date.parse(s)+n*864e5).toISOString().slice(0,10);
+const diff=(a,b)=>Math.round((Date.parse(b)-Date.parse(a))/864e5);
+const today=iso(new Date());
+const fmtDate=s=>new Date(s+'T00:00:00').toLocaleDateString('en-PH',{weekday:'short',month:'short',day:'numeric',year:'numeric'});
+
+// ---------- Initial form values ----------
+$('#in').min=$('#out').min=today;
+$('#in').value=addDays(today,7);$('#out').value=addDays(today,10);
+$('#guests').innerHTML=[1,2,3,4,5].map(n=>`<option value="${n}"${n===2?' selected':''}>${n} guest${n>1?'s':''}</option>`).join('');
+
+// ---------- Pricing ----------
+function quote(room){
+  const inn=$('#in').value,out=$('#out').value,nights=diff(inn,out);
+  if(!inn||!out||nights<1)return null;
+  const sub=room.rate*nights,code=$('#promo').value.trim().toUpperCase(),p=PROMOS[code];
+  let off=0,promo='';
+  if(p&&p.ok({nights,sub,lead:diff(today,inn)})){off=Math.round(p.off({nights,sub}));promo=code}
+  return{nights,sub,off,total:sub-off,promo,inn,out};
+}
+function promoStatus(){
+  const m=$('#searchMsg'),inn=$('#in').value,out=$('#out').value,nights=diff(inn,out),code=$('#promo').value.trim().toUpperCase();
+  m.className='msg';
+  if(!inn||!out||nights<1){m.textContent='Check-out must be after check-in.';m.classList.add('err');return}
+  if(!code){m.textContent=nights+' night'+(nights>1?'s':'')+' selected.';return}
+  const p=PROMOS[code];
+  if(!p){m.textContent='We don’t recognize the code "'+code+'". Try one from the offers below.';m.classList.add('err');return}
+  if(!p.ok({nights,sub:1,lead:diff(today,inn)})){m.textContent=p.err;m.classList.add('err');return}
+  m.textContent=code+' applied: '+p.title+'.';m.classList.add('ok');
+}
+
+// ---------- Rendering ----------
+function renderRooms(){
+  promoStatus();
+  const g=+$('#guests').value;
+  $('#roomList').innerHTML=ROOMS.map(r=>{
+    const q=quote(r),fits=g<=r.cap;
+    const price=q?`<div class="price"><b>${peso(q.total)}</b>${q.off?`<s>${peso(q.sub)}</s>`:''}<small>for ${q.nights} night${q.nights>1?'s':''}</small></div>`:`<div class="price"><b>${peso(r.rate)}</b><small>per night</small></div>`;
+    return `<article class="room"><div class="pic" style="background:linear-gradient(135deg,${r.tone},#5cc2cf)"></div><div class="body"><h3>${r.name}</h3><p>${r.desc}</p><p>Sleeps up to ${r.cap}. ${peso(r.rate)} per night.</p>${price}<button class="btn" data-book="${r.id}" ${(!q||!fits)?'disabled':''}>${!fits?'Too small for '+g+' guests':'Book this room'}</button></div></article>`;
+  }).join('');
+}
+$('#promoList').innerHTML=Object.entries(PROMOS).map(([c,p])=>`<article class="promo"><span class="code">${c}</span><h3>${p.title}</h3><p>${p.text}</p><button class="btn ghost" data-promo="${c}">Use this code</button></article>`).join('');
+
+// ---------- Search form events ----------
+$('#search').addEventListener('submit',e=>{e.preventDefault();renderRooms();$('#rooms').scrollIntoView()});
+['in','out','guests','promo'].forEach(id=>$('#'+id).addEventListener('input',()=>{
+  if(id==='in'&&$('#out').value<=$('#in').value)$('#out').value=addDays($('#in').value,1);
+  renderRooms();
+}));
+document.addEventListener('click',e=>{
+  const b=e.target.closest('[data-book]'),p=e.target.closest('[data-promo]');
+  if(b)openBooking(b.dataset.book);
+  if(p){$('#promo').value=p.dataset.promo;renderRooms();$('#search').scrollIntoView()}
+});
+
+// ---------- Booking dialog ----------
+const dlg=$('#dlg');
+function openBooking(id){
+  const r=ROOMS.find(x=>x.id===id),q=quote(r),g=+$('#guests').value;
+  dlg.innerHTML=`<h3 id="dlgTitle">Book ${r.name}</h3>
+  <dl><dt>Dates</dt><dd>${fmtDate(q.inn)} to ${fmtDate(q.out)}</dd><dt>Nights</dt><dd>${q.nights}</dd><dt>Guests</dt><dd>${g}</dd><dt>Room rate</dt><dd>${peso(q.sub)}</dd>${q.off?`<dt>${q.promo}</dt><dd>-${peso(q.off)}</dd>`:''}</dl>
+  <div class="total"><span>Total, pay at the hotel</span><span>${peso(q.total)}</span></div>
+  <form id="bkForm" style="display:grid;gap:12px;margin-top:16px">
+    <div class="row"><label>First name<input name="first" required autocomplete="given-name"></label><label>Last name<input name="last" required autocomplete="family-name"></label></div>
+    <label>Email<input name="email" type="email" required autocomplete="email"></label>
+    <label>Special requests (optional)<textarea name="note" rows="2"></textarea></label>
+    <div class="actions"><button class="btn sun" type="submit">Confirm booking</button><button class="btn ghost" type="button" data-close>Cancel</button></div>
+  </form>`;
+  dlg.showModal();
+  $('#bkForm').addEventListener('submit',ev=>{
+    ev.preventDefault();
+    const f=new FormData(ev.target),all=load();
+    const code='ALN-'+Math.random().toString(36).slice(2,7).toUpperCase();
+    const bk={code,first:f.get('first').trim(),last:f.get('last').trim(),email:f.get('email').trim(),note:f.get('note').trim(),room:r.id,guests:g,inn:q.inn,out:q.out,nights:q.nights,total:q.total,promo:q.promo,status:'booked'};
+    all.push(bk);save(all);
+    dlg.innerHTML=`<h3 id="dlgTitle">You’re booked, ${esc(bk.first)}.</h3><p class="sub">Your confirmation code is below. Keep it for online check-in.</p><p class="key">${code}</p><dl><dt>Room</dt><dd>${r.name}</dd><dt>Stay</dt><dd>${fmtDate(bk.inn)} to ${fmtDate(bk.out)}</dd><dt>Total</dt><dd>${peso(bk.total)}</dd></dl><div class="actions"><button class="btn" data-goci="${code}|${esc(bk.last)}">Check in now</button><button class="btn ghost" data-close>Close</button></div>`;
+  });
+}
+dlg.addEventListener('click',e=>{
+  if(e.target.closest('[data-close]')||e.target===dlg)dlg.close();
+  const g=e.target.closest('[data-goci]');
+  if(g){const[c,n]=g.dataset.goci.split('|');$('#ciCode').value=c;$('#ciName').value=n;dlg.close();$('#checkin').scrollIntoView();$('#findForm').requestSubmit()}
+});
+
+// ---------- Online check-in ----------
+function showBooking(c){
+  const all=load(),bk=all.find(b=>b.code===c.toUpperCase());
+  const out=$('#ciResult');
+  const r=ROOMS.find(x=>x.id===bk.room);
+  let html=`<dl><dt>Guest</dt><dd>${esc(bk.first)} ${esc(bk.last)}</dd><dt>Room type</dt><dd>${r.name}</dd><dt>Stay</dt><dd>${fmtDate(bk.inn)} to ${fmtDate(bk.out)}</dd><dt>Status</dt><dd><span class="status ${bk.status==='checked-in'?'in':''}">${bk.status==='checked-in'?'Checked in':'Booked'}</span></dd></dl>`;
+  if(bk.status==='checked-in'){
+    html+=`<p>Your room is <b>${bk.roomNo}</b>. Your digital key PIN is:</p><p class="key">${bk.pin}</p><p class="sub">Enter the PIN on the keypad by your door. Arrival time: ${esc(bk.eta)}.</p>`;
+  }else{
+    html+=`<form id="doCheckin" style="display:grid;gap:14px;margin-top:8px"><label>Expected arrival time<select name="eta"><option>Before noon</option><option>12:00 to 15:00</option><option selected>15:00 to 18:00</option><option>18:00 to 21:00</option><option>After 21:00</option></select></label><label style="display:flex;gap:10px;align-items:flex-start;color:var(--ink)"><input type="checkbox" name="id" required style="width:auto;margin-top:5px">I’ll show a valid government ID at the front desk when I collect my key card.</label><button class="btn sun" type="submit">Complete check-in</button></form>`;
+  }
+  out.innerHTML=html;
+  const form=$('#doCheckin');
+  if(form)form.addEventListener('submit',ev=>{
+    ev.preventDefault();
+    const list=load(),i=list.findIndex(b=>b.code===bk.code);
+    list[i].status='checked-in';
+    list[i].eta=new FormData(ev.target).get('eta');
+    list[i].roomNo=String(r.floor*100+1+Math.floor(Math.random()*20));
+    list[i].pin=String(1000+Math.floor(Math.random()*9000));
+    save(list);showBooking(bk.code);
+  });
+}
+$('#findForm').addEventListener('submit',e=>{
+  e.preventDefault();
+  const c=$('#ciCode').value.trim().toUpperCase(),n=$('#ciName').value.trim().toLowerCase();
+  const bk=load().find(b=>b.code===c&&b.last.toLowerCase()===n);
+  if(!bk){$('#ciResult').innerHTML='<p class="msg err">No booking matches that code and last name. Check both and try again.</p>';return}
+  showBooking(c);
+});
+
+// ---------- Start ----------
+renderRooms();
